@@ -136,7 +136,7 @@ class OrdinalEncoder(BaseEstimator, TransformerMixin):
             if X[self.cols].isnull().any().any():
                 raise ValueError('Columns to be encoded can not contain null')
 
-        _, categories = self.ordinal_encoding(
+        _, categories = self.ordinal_encoding_dict_lookup(
             X,
             mapping=self.mapping,
             cols=self.cols,
@@ -200,7 +200,7 @@ class OrdinalEncoder(BaseEstimator, TransformerMixin):
         if not list(self.cols):
             return X if self.return_df else X.values
 
-        X, _ = self.ordinal_encoding(
+        X, _ = self.ordinal_encoding_dict_lookup(
             X,
             mapping=self.mapping,
             cols=self.cols,
@@ -269,6 +269,50 @@ class OrdinalEncoder(BaseEstimator, TransformerMixin):
             X[switch.get('col')] = X[switch.get('col')].map(inverse).astype(switch.get('data_type'))
 
         return X if self.return_df else X.values
+
+    @staticmethod
+    def ordinal_encoding_dict_lookup(X_in, mapping=None, cols=None, handle_unknown='value', handle_missing='value'):
+        """
+        Normal ordinal encoding is an O(N) implementation and does not use a dict for faster lookup.
+        This aims at providing an improved version with dict lookup
+        This implementation does not support nan in the data
+        """
+
+        X = X_in.copy(deep=True)
+        if cols is None:
+            cols = X.columns.values
+
+        if mapping is not None:
+            mapping_out = mapping
+            for switch in mapping:
+                column = switch.get('col')
+                col_mapping = switch['mapping']
+                X[column] = [col_mapping.get(x, -1) for x in X[column]]
+        else:
+            mapping_out = []
+            for col in cols:
+                nan_identity = np.nan
+
+                if util.is_category(X[col].dtype):
+                    categories = X[col].cat.categories.tolist()
+                    if X[col].isna().any():
+                        categories += [np.nan]
+                else:
+                    categories = X[col].unique()
+
+                index = pd.Series(categories).fillna(nan_identity).unique()
+
+                data = pd.Series(index=index, data=range(1, len(index) + 1))
+
+                if handle_missing == 'value' and ~data.index.isnull().any():
+                    data.loc[nan_identity] = -2
+                elif handle_missing == 'return_nan':
+                    data.loc[nan_identity] = -2
+
+                data = data.to_dict()
+                mapping_out.append({'col': col, 'mapping': data, 'data_type': X[col].dtype}, )
+
+        return X, mapping_out
 
     @staticmethod
     def ordinal_encoding(X_in, mapping=None, cols=None, handle_unknown='value', handle_missing='value'):
