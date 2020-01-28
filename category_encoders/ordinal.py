@@ -279,8 +279,6 @@ class OrdinalEncoder(BaseEstimator, TransformerMixin):
         """
 
         X = X_in.copy(deep=True)
-        if cols is None:
-            cols = X.columns.values
 
         if mapping is not None:
             mapping_out = mapping
@@ -289,6 +287,8 @@ class OrdinalEncoder(BaseEstimator, TransformerMixin):
                 col_mapping = switch['mapping']
                 X[column] = [col_mapping.get(x, -1) for x in X[column]]
         else:
+            if cols is None:
+                cols = X.columns.values
             mapping_out = []
             for col in cols:
                 nan_identity = np.nan
